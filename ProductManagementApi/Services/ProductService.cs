@@ -2,6 +2,7 @@
 using Microsoft.EntityFrameworkCore;
 using ProductManagementApi.Data;
 using ProductManagementApi.Models;
+using ProductManagementApi.DTOs;
 
 namespace ProductManagementApi.Services
 {
@@ -16,21 +17,38 @@ namespace ProductManagementApi.Services
             _environment = environment;
         }
 
-        public async Task<IEnumerable<Product>> GetAllProductsAsync(string? search, int? categoryId)
+        public async Task<PagedResult<Product>> GetAllProductsAsync(string? search, int? categoryId, int pageNumber, int pageSize)
         {
             var query = _context.Products.Include(p => p.Category).AsQueryable();
 
+            // Apply search filter
             if (!string.IsNullOrWhiteSpace(search))
             {
                 query = query.Where(p => p.Name.Contains(search) || p.Description.Contains(search));
             }
 
+            // Apply category filter
             if (categoryId.HasValue)
             {
                 query = query.Where(p => p.CategoryId == categoryId.Value);
             }
 
-            return await query.ToListAsync();
+            // Get total count of matching records before pagination
+            var totalItems = await query.CountAsync();
+
+            // Apply database-level pagination using Skip and Take
+            var items = await query
+                .Skip((pageNumber - 1) * pageSize)
+                .Take(pageSize)
+                .ToListAsync();
+
+            return new PagedResult<Product>
+            {
+                Items = items,
+                PageNumber = pageNumber,
+                PageSize = pageSize,
+                TotalItems = totalItems
+            };
         }
 
         public async Task<Product?> GetProductByIdAsync(int id)

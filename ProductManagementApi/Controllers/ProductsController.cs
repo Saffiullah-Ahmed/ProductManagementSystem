@@ -17,12 +17,21 @@ public class ProductsController : ControllerBase
     }
 
     [HttpGet]
-    public async Task<IActionResult> GetAll([FromQuery] string? search, [FromQuery] int? categoryId)
+    public async Task<IActionResult> GetAll(
+        [FromQuery] string? search,
+        [FromQuery] int? categoryId,
+        [FromQuery] int pageNumber = 1,
+        [FromQuery] int pageSize = 10)
     {
-        var products = await _productService.GetAllProductsAsync(search, categoryId);
+        // Enforce safe pagination bounds
+        if (pageNumber < 1) pageNumber = 1;
+        if (pageSize < 1) pageSize = 10;
+        if (pageSize > 50) pageSize = 50; // Optional cap for safety
 
-        // Map products to ProductDto so ImageUrl gets sent properly
-        var productDtos = products.Select(p => new ProductDto
+        var pagedResult = await _productService.GetAllProductsAsync(search, categoryId, pageNumber, pageSize);
+
+        // Map products to ProductDto so ImageUrl and CategoryName get sent properly
+        var productDtos = pagedResult.Items.Select(p => new ProductDto
         {
             Id = p.Id,
             Name = p.Name,
@@ -35,7 +44,16 @@ public class ProductsController : ControllerBase
             CategoryName = p.Category?.Name ?? string.Empty
         });
 
-        return Ok(productDtos);
+        var response = new
+        {
+            items = productDtos,
+            pageNumber = pagedResult.PageNumber,
+            pageSize = pagedResult.PageSize,
+            totalItems = pagedResult.TotalItems,
+            totalPages = pagedResult.TotalPages
+        };
+
+        return Ok(response);
     }
 
     [HttpGet("{id}")]

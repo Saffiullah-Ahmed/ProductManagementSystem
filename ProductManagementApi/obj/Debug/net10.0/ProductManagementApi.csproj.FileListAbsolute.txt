@@ -167,3 +167,5 @@ D:\Projects\ProductManagementSystem\ProductManagementApi\bin\Debug\net10.0\Swash
 D:\Projects\ProductManagementSystem\ProductManagementApi\bin\Debug\net10.0\Swashbuckle.AspNetCore.SwaggerUI.dll
 D:\Projects\ProductManagementSystem\ProductManagementApi\bin\Debug\net10.0\Microsoft.Bcl.Cryptography.dll
 D:\Projects\ProductManagementSystem\ProductManagementApi\bin\Debug\net10.0\Microsoft.AspNetCore.Authentication.JwtBearer.dll
+D:\Projects\ProductManagementSystem\ProductManagementApi\obj\Debug\net10.0\ProductManagementApi.sourcelink.json
+D:\Projects\ProductManagementSystem\ProductManagementApi\bin\Debug\net10.0\ProductManagementApi.staticwebassets.runtime.json
