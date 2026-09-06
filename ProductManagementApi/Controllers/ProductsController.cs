@@ -20,17 +20,17 @@ public class ProductsController : ControllerBase
     public async Task<IActionResult> GetAll(
         [FromQuery] string? search,
         [FromQuery] int? categoryId,
+        [FromQuery] string? sortBy,
+        [FromQuery] string? sortOrder,
         [FromQuery] int pageNumber = 1,
         [FromQuery] int pageSize = 10)
     {
-        // Enforce safe pagination bounds
         if (pageNumber < 1) pageNumber = 1;
         if (pageSize < 1) pageSize = 10;
-        if (pageSize > 50) pageSize = 50; // Optional cap for safety
+        if (pageSize > 50) pageSize = 50;
 
-        var pagedResult = await _productService.GetAllProductsAsync(search, categoryId, pageNumber, pageSize);
+        var pagedResult = await _productService.GetAllProductsAsync(search, categoryId, sortBy, sortOrder, pageNumber, pageSize);
 
-        // Map products to ProductDto so ImageUrl and CategoryName get sent properly
         var productDtos = pagedResult.Items.Select(p => new ProductDto
         {
             Id = p.Id,

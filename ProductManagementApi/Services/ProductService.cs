@@ -17,30 +17,42 @@ namespace ProductManagementApi.Services
             _environment = environment;
         }
 
-        public async Task<PagedResult<Product>> GetAllProductsAsync(string? search, int? categoryId, int pageNumber, int pageSize)
+        public async Task<PagedResult<Product>> GetAllProductsAsync(string? search, int? categoryId, string? sortBy, string? sortOrder, int pageNumber, int pageSize)
         {
             var query = _context.Products.Include(p => p.Category).AsQueryable();
 
-            // Apply search filter
+            // 1. Apply search filter
             if (!string.IsNullOrWhiteSpace(search))
             {
                 query = query.Where(p => p.Name.Contains(search) || p.Description.Contains(search));
             }
 
-            // Apply category filter
+            // 2. Apply category filter
             if (categoryId.HasValue)
             {
                 query = query.Where(p => p.CategoryId == categoryId.Value);
             }
 
-            // Get total count of matching records before pagination
+            // 3. Apply database-level sorting
+            bool isDescending = !string.IsNullOrEmpty(sortOrder) && sortOrder.Equals("desc", StringComparison.OrdinalIgnoreCase);
+
+            query = sortBy?.ToLowerInvariant() switch
+            {
+                "name" => isDescending ? query.OrderByDescending(p => p.Name) : query.OrderBy(p => p.Name),
+                "price" => isDescending ? query.OrderByDescending(p => p.Price) : query.OrderBy(p => p.Price),
+                "stock" => isDescending ? query.OrderByDescending(p => p.Stock) : query.OrderBy(p => p.Stock),
+                "createddate" => isDescending ? query.OrderByDescending(p => p.CreatedDate) : query.OrderBy(p => p.CreatedDate),
+                _ => query.OrderBy(p => p.Id) // Default safe ordering
+            };
+
+            // 4. Get total count of matching records after filtering, before pagination
             var totalItems = await query.CountAsync();
 
-            // Apply database-level pagination using Skip and Take
+            // 5. Apply database-level pagination using Skip and Take
             var items = await query
-                .Skip((pageNumber - 1) * pageSize)
-                .Take(pageSize)
-                .ToListAsync();
+              .Skip((pageNumber - 1) * pageSize)
+              .Take(pageSize)
+              .ToListAsync();
 
             return new PagedResult<Product>
             {
@@ -74,17 +86,14 @@ namespace ProductManagementApi.Services
 
             if (image != null && image.Length > 0)
             {
-                // Delete old image if it exists
                 if (!string.IsNullOrEmpty(existingProduct.ImageUrl))
                 {
                     DeletePhysicalImage(existingProduct.ImageUrl);
                 }
-                // Save new image
                 product.ImageUrl = await SaveImageAsync(image);
             }
             else
             {
-                // Retain existing image if no new file is uploaded
                 product.ImageUrl = existingProduct.ImageUrl;
             }
 
@@ -97,7 +106,6 @@ namespace ProductManagementApi.Services
             var product = await _context.Products.FindAsync(id);
             if (product != null)
             {
-                // Delete physical image file from disk
                 if (!string.IsNullOrEmpty(product.ImageUrl))
                 {
                     DeletePhysicalImage(product.ImageUrl);
@@ -108,10 +116,8 @@ namespace ProductManagementApi.Services
             }
         }
 
-        // Helper: Save Image to wwwroot/images/products
         private async Task<string> SaveImageAsync(IFormFile image)
         {
-            // Validate allowed extensions
             var permittedExtensions = new[] { ".jpg", ".jpeg", ".png", ".webp" };
             var extension = Path.GetExtension(image.FileName).ToLowerInvariant();
 
@@ -120,7 +126,6 @@ namespace ProductManagementApi.Services
                 throw new BadHttpRequestException("Invalid file type. Only JPG, JPEG, PNG, and WEBP files are allowed.");
             }
 
-            // Define target folder: wwwroot/images/products
             string uploadsFolder = Path.Combine(_environment.WebRootPath ?? Path.Combine(Directory.GetCurrentDirectory(), "wwwroot"), "images", "products");
 
             if (!Directory.Exists(uploadsFolder))
@@ -128,7 +133,6 @@ namespace ProductManagementApi.Services
                 Directory.CreateDirectory(uploadsFolder);
             }
 
-            // Generate safe, unique file name using a GUID
             string uniqueFileName = $"{Guid.NewGuid()}{extension}";
             string filePath = Path.Combine(uploadsFolder, uniqueFileName);
 
@@ -137,11 +141,9 @@ namespace ProductManagementApi.Services
                 await image.CopyToAsync(fileStream);
             }
 
-            // Return relative URL path stored in DB
             return $"images/products/{uniqueFileName}";
         }
 
-        // Helper: Remove physical file from disk
         private void DeletePhysicalImage(string imageUrl)
         {
             try
@@ -156,7 +158,7 @@ namespace ProductManagementApi.Services
             }
             catch
             {
-                // Ignore file deletion errors to prevent blocking main database transaction
+                // Ignore file deletion errors
             }
         }
     }
