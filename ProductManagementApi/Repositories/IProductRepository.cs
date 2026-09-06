@@ -9,5 +9,8 @@ namespace ProductManagementApi.Repositories
         Task AddAsync(Product product);
         Task UpdateAsync(Product product);
         Task DeleteAsync(Product product);
+        Task<IEnumerable<Product>> GetLowStockProductsAsync(int threshold);
+        Task<int> GetLowStockCountAsync(int threshold);
+        Task<int> GetOutOfStockCountAsync();
     }
 }

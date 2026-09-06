@@ -1,5 +1,6 @@
 ﻿using Microsoft.AspNetCore.Http;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Configuration;
 using ProductManagementApi.Data;
 using ProductManagementApi.Models;
 using ProductManagementApi.DTOs;
@@ -10,16 +11,32 @@ namespace ProductManagementApi.Services
     {
         private readonly ApplicationDbContext _context;
         private readonly IWebHostEnvironment _environment;
+        private readonly IConfiguration _configuration;
 
-        public ProductService(ApplicationDbContext context, IWebHostEnvironment environment)
+        public ProductService(ApplicationDbContext context, IWebHostEnvironment environment, IConfiguration configuration)
         {
             _context = context;
             _environment = environment;
+            _configuration = configuration;
         }
 
-        public async Task<PagedResult<Product>> GetAllProductsAsync(string? search, int? categoryId, string? sortBy, string? sortOrder, int pageNumber, int pageSize)
+        private int GetThreshold()
+        {
+            return _configuration.GetValue<int>("LowStockThreshold", 5);
+        }
+
+        public string CalculateStockStatus(int stock)
+        {
+            int threshold = GetThreshold();
+            if (stock == 0) return "Out of Stock";
+            if (stock <= threshold) return "Low Stock";
+            return "Available";
+        }
+
+        public async Task<PagedResult<Product>> GetAllProductsAsync(string? search, int? categoryId, string? sortBy, string? sortOrder, int pageNumber, int pageSize, string? stockStatus = null)
         {
             var query = _context.Products.Include(p => p.Category).AsQueryable();
+            int threshold = GetThreshold();
 
             // 1. Apply search filter
             if (!string.IsNullOrWhiteSpace(search))
@@ -33,7 +50,24 @@ namespace ProductManagementApi.Services
                 query = query.Where(p => p.CategoryId == categoryId.Value);
             }
 
-            // 3. Apply database-level sorting
+            // 3. Apply stock status filter at database level
+            if (!string.IsNullOrWhiteSpace(stockStatus))
+            {
+                if (stockStatus.Equals("Low Stock", StringComparison.OrdinalIgnoreCase))
+                {
+                    query = query.Where(p => p.Stock > 0 && p.Stock <= threshold);
+                }
+                else if (stockStatus.Equals("Out of Stock", StringComparison.OrdinalIgnoreCase))
+                {
+                    query = query.Where(p => p.Stock == 0);
+                }
+                else if (stockStatus.Equals("Available", StringComparison.OrdinalIgnoreCase))
+                {
+                    query = query.Where(p => p.Stock > threshold);
+                }
+            }
+
+            // 4. Apply database-level sorting
             bool isDescending = !string.IsNullOrEmpty(sortOrder) && sortOrder.Equals("desc", StringComparison.OrdinalIgnoreCase);
 
             query = sortBy?.ToLowerInvariant() switch
@@ -42,13 +76,13 @@ namespace ProductManagementApi.Services
                 "price" => isDescending ? query.OrderByDescending(p => p.Price) : query.OrderBy(p => p.Price),
                 "stock" => isDescending ? query.OrderByDescending(p => p.Stock) : query.OrderBy(p => p.Stock),
                 "createddate" => isDescending ? query.OrderByDescending(p => p.CreatedDate) : query.OrderBy(p => p.CreatedDate),
-                _ => query.OrderBy(p => p.Id) // Default safe ordering
+                _ => query.OrderBy(p => p.Id)
             };
 
-            // 4. Get total count of matching records after filtering, before pagination
+            // 5. Get total count of matching records after filtering, before pagination
             var totalItems = await query.CountAsync();
 
-            // 5. Apply database-level pagination using Skip and Take
+            // 6. Apply database-level pagination using Skip and Take
             var items = await query
               .Skip((pageNumber - 1) * pageSize)
               .Take(pageSize)
@@ -66,6 +100,30 @@ namespace ProductManagementApi.Services
         public async Task<Product?> GetProductByIdAsync(int id)
         {
             return await _context.Products.Include(p => p.Category).FirstOrDefaultAsync(p => p.Id == id);
+        }
+
+        public async Task<IEnumerable<Product>> GetLowStockProductsAsync()
+        {
+            int threshold = GetThreshold();
+            return await _context.Products
+                .Include(p => p.Category)
+                .Where(p => p.Stock > 0 && p.Stock <= threshold)
+                .ToListAsync();
+        }
+
+        public async Task<int> GetLowStockCountAsync()
+        {
+            int threshold = GetThreshold();
+            return await _context.Products
+                .Where(p => p.Stock > 0 && p.Stock <= threshold)
+                .CountAsync();
+        }
+
+        public async Task<int> GetOutOfStockCountAsync()
+        {
+            return await _context.Products
+                .Where(p => p.Stock == 0)
+                .CountAsync();
         }
 
         public async Task CreateProductAsync(Product product, IFormFile? image)

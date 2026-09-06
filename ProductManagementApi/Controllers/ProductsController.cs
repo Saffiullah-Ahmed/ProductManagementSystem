@@ -23,13 +23,14 @@ public class ProductsController : ControllerBase
         [FromQuery] string? sortBy,
         [FromQuery] string? sortOrder,
         [FromQuery] int pageNumber = 1,
-        [FromQuery] int pageSize = 10)
+        [FromQuery] int pageSize = 10,
+        [FromQuery] string? stockStatus = null)
     {
         if (pageNumber < 1) pageNumber = 1;
         if (pageSize < 1) pageSize = 10;
         if (pageSize > 50) pageSize = 50;
 
-        var pagedResult = await _productService.GetAllProductsAsync(search, categoryId, sortBy, sortOrder, pageNumber, pageSize);
+        var pagedResult = await _productService.GetAllProductsAsync(search, categoryId, sortBy, sortOrder, pageNumber, pageSize, stockStatus);
 
         var productDtos = pagedResult.Items.Select(p => new ProductDto
         {
@@ -41,7 +42,8 @@ public class ProductsController : ControllerBase
             ImageUrl = p.ImageUrl,
             CreatedDate = p.CreatedDate,
             CategoryId = p.CategoryId,
-            CategoryName = p.Category?.Name ?? string.Empty
+            CategoryName = p.Category?.Name ?? string.Empty,
+            StockStatus = (_productService as ProductService)?.CalculateStockStatus(p.Stock) ?? "Available"
         });
 
         var response = new
@@ -54,6 +56,40 @@ public class ProductsController : ControllerBase
         };
 
         return Ok(response);
+    }
+
+    [HttpGet("low-stock")]
+    public async Task<IActionResult> GetLowStockProducts()
+    {
+        var products = await _productService.GetLowStockProductsAsync();
+        var productDtos = products.Select(p => new ProductDto
+        {
+            Id = p.Id,
+            Name = p.Name,
+            Description = p.Description,
+            Price = p.Price,
+            Stock = p.Stock,
+            ImageUrl = p.ImageUrl,
+            CreatedDate = p.CreatedDate,
+            CategoryId = p.CategoryId,
+            CategoryName = p.Category?.Name ?? string.Empty,
+            StockStatus = "Low Stock"
+        });
+
+        return Ok(productDtos);
+    }
+
+    [HttpGet("stock-stats")]
+    public async Task<IActionResult> GetStockStats()
+    {
+        var lowStockCount = await _productService.GetLowStockCountAsync();
+        var outOfStockCount = await _productService.GetOutOfStockCountAsync();
+
+        return Ok(new
+        {
+            lowStockCount,
+            outOfStockCount
+        });
     }
 
     [HttpGet("{id}")]
@@ -73,7 +109,8 @@ public class ProductsController : ControllerBase
             ImageUrl = p.ImageUrl,
             CreatedDate = p.CreatedDate,
             CategoryId = p.CategoryId,
-            CategoryName = p.Category?.Name ?? string.Empty
+            CategoryName = p.Category?.Name ?? string.Empty,
+            StockStatus = (_productService as ProductService)?.CalculateStockStatus(p.Stock) ?? "Available"
         };
 
         return Ok(productDto);
@@ -105,7 +142,8 @@ public class ProductsController : ControllerBase
                 Stock = product.Stock,
                 ImageUrl = product.ImageUrl,
                 CreatedDate = product.CreatedDate,
-                CategoryId = product.CategoryId
+                CategoryId = product.CategoryId,
+                StockStatus = (_productService as ProductService)?.CalculateStockStatus(product.Stock) ?? "Available"
             };
 
             return CreatedAtAction(nameof(GetById), new { id = product.Id }, responseDto);

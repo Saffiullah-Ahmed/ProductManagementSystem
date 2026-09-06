@@ -35,6 +35,28 @@ namespace ProductManagementApi.Repositories
             await _context.SaveChangesAsync();
         }
 
+        public async Task<IEnumerable<Product>> GetLowStockProductsAsync(int threshold)
+        {
+            return await _context.Products
+                .Include(p => p.Category)
+                .Where(p => p.Stock > 0 && p.Stock <= threshold)
+                .ToListAsync();
+        }
+
+        public async Task<int> GetLowStockCountAsync(int threshold)
+        {
+            return await _context.Products
+                .Where(p => p.Stock > 0 && p.Stock <= threshold)
+                .CountAsync();
+        }
+
+        public async Task<int> GetOutOfStockCountAsync()
+        {
+            return await _context.Products
+                .Where(p => p.Stock == 0)
+                .CountAsync();
+        }
+
         public async Task DeleteAsync(Product product)
         {
             _context.Products.Remove(product);
