@@ -1,5 +1,6 @@
 ﻿using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using ProductManagementApi.DTOs;
 using ProductManagementApi.Models;
 using ProductManagementApi.Services;
 
@@ -19,46 +20,121 @@ public class ProductsController : ControllerBase
     public async Task<IActionResult> GetAll([FromQuery] string? search, [FromQuery] int? categoryId)
     {
         var products = await _productService.GetAllProductsAsync(search, categoryId);
-        return Ok(products);
+
+        // Map products to ProductDto so ImageUrl gets sent properly
+        var productDtos = products.Select(p => new ProductDto
+        {
+            Id = p.Id,
+            Name = p.Name,
+            Description = p.Description,
+            Price = p.Price,
+            Stock = p.Stock,
+            ImageUrl = p.ImageUrl,
+            CreatedDate = p.CreatedDate,
+            CategoryId = p.CategoryId,
+            CategoryName = p.Category?.Name ?? string.Empty
+        });
+
+        return Ok(productDtos);
     }
 
     [HttpGet("{id}")]
     public async Task<IActionResult> GetById(int id)
     {
-        var product = await _productService.GetProductByIdAsync(id);
-        if (product == null)
+        var p = await _productService.GetProductByIdAsync(id);
+        if (p == null)
             return NotFound();
 
-        return Ok(product);
+        var productDto = new ProductDto
+        {
+            Id = p.Id,
+            Name = p.Name,
+            Description = p.Description,
+            Price = p.Price,
+            Stock = p.Stock,
+            ImageUrl = p.ImageUrl,
+            CreatedDate = p.CreatedDate,
+            CategoryId = p.CategoryId,
+            CategoryName = p.Category?.Name ?? string.Empty
+        };
+
+        return Ok(productDto);
     }
 
     [HttpPost]
-    public async Task<IActionResult> Create([FromBody] Product product)
+    [Authorize]
+    public async Task<IActionResult> Create([FromForm] CreateProductDto dto)
     {
         try
         {
-            await _productService.CreateProductAsync(product);
-            return CreatedAtAction(nameof(GetById), new { id = product.Id }, product);
+            var product = new Product
+            {
+                Name = dto.Name,
+                Description = dto.Description,
+                Price = dto.Price,
+                Stock = dto.Stock,
+                CategoryId = dto.CategoryId
+            };
+
+            await _productService.CreateProductAsync(product, dto.Image);
+
+            var responseDto = new ProductDto
+            {
+                Id = product.Id,
+                Name = product.Name,
+                Description = product.Description,
+                Price = product.Price,
+                Stock = product.Stock,
+                ImageUrl = product.ImageUrl,
+                CreatedDate = product.CreatedDate,
+                CategoryId = product.CategoryId
+            };
+
+            return CreatedAtAction(nameof(GetById), new { id = product.Id }, responseDto);
+        }
+        catch (BadHttpRequestException ex)
+        {
+            return BadRequest(new { message = ex.Message });
         }
         catch (Exception ex)
         {
-            // This will send the exact SQL or EF constraint failure message back to your frontend network response
             var innerMessage = ex.InnerException?.Message ?? ex.Message;
             return StatusCode(500, new { message = "Database save failed", detailed = innerMessage });
         }
     }
 
     [HttpPut("{id}")]
-    public async Task<IActionResult> Update(int id, [FromBody] Product product)
+    [Authorize(Roles = "Admin")]
+    public async Task<IActionResult> Update(int id, [FromForm] UpdateProductDto dto)
     {
-        if (id != product.Id)
-            return BadRequest();
+        try
+        {
+            var existing = await _productService.GetProductByIdAsync(id);
+            if (existing == null)
+                return NotFound();
 
-        await _productService.UpdateProductAsync(product);
-        return NoContent();
+            existing.Name = dto.Name;
+            existing.Description = dto.Description;
+            existing.Price = dto.Price;
+            existing.Stock = dto.Stock;
+            existing.CategoryId = dto.CategoryId;
+
+            await _productService.UpdateProductAsync(existing, dto.Image);
+            return NoContent();
+        }
+        catch (BadHttpRequestException ex)
+        {
+            return BadRequest(new { message = ex.Message });
+        }
+        catch (Exception ex)
+        {
+            var innerMessage = ex.InnerException?.Message ?? ex.Message;
+            return StatusCode(500, new { message = "Update failed", detailed = innerMessage });
+        }
     }
 
     [HttpDelete("{id}")]
+    [Authorize(Roles = "Admin")]
     public async Task<IActionResult> Delete(int id)
     {
         await _productService.DeleteProductAsync(id);

@@ -31,7 +31,7 @@ builder.Services.AddCors(options =>
     });
 });
 
-// Configure JWT Authentication (Temporarily relaxing Issuer/Audience validation to fix 401 Unauthorized)
+// Configure JWT Authentication
 var jwtSettings = builder.Configuration.GetSection("Jwt");
 var key = Encoding.ASCII.GetBytes(jwtSettings["Key"] ?? throw new InvalidOperationException("JWT Key not configured."));
 
@@ -63,7 +63,7 @@ builder.Services.AddControllers()
 
 builder.Services.AddEndpointsApiExplorer();
 
-// Configure Swagger with JWT Support (.NET 10 / Microsoft.OpenApi v2 syntax)
+// Configure Swagger with JWT Support
 builder.Services.AddSwaggerGen(c =>
 {
     c.SwaggerDoc("v1", new OpenApiInfo { Title = "ProductManagementApi", Version = "v1" });
@@ -99,6 +99,9 @@ if (app.Environment.IsDevelopment())
 }
 
 app.UseHttpsRedirection();
+
+// Enable static files to serve uploaded images from wwwroot
+app.UseStaticFiles();
 
 // Enable CORS middleware (must be before Authentication/Authorization)
 app.UseCors("AllowAngular");

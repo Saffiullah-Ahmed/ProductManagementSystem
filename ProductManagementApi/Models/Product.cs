@@ -7,8 +7,8 @@
         public string Description { get; set; } = string.Empty;
         public decimal Price { get; set; }
         public int Stock { get; set; }
+        public string? ImageUrl { get; set; } // Added for product image path/URL
 
-        // Add this property
         public DateTime CreatedDate { get; set; } = DateTime.Now;
 
         // Foreign Key for Category
