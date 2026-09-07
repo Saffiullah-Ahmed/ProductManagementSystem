@@ -64,6 +64,12 @@ namespace ProductManagementApi.Services
                 throw new Exception("Invalid email or password.");
             }
 
+            // Check if account is active/enabled
+            if (!user.IsActive)
+            {
+                throw new Exception("Your account has been disabled.");
+            }
+
             var passwordHasher = new Microsoft.AspNetCore.Identity.PasswordHasher<User>();
             var result = passwordHasher.VerifyHashedPassword(user, user.PasswordHash, loginDto.Password);
 
