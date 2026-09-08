@@ -35,22 +35,19 @@ namespace ProductManagementApi.Services
 
         public async Task<PagedResult<Product>> GetAllProductsAsync(string? search, int? categoryId, string? sortBy, string? sortOrder, int pageNumber, int pageSize, string? stockStatus = null)
         {
-            var query = _context.Products.Include(p => p.Category).AsQueryable();
+            var query = _context.Products.Include(p => p.Category).Where(p => !p.IsDeleted).AsQueryable();
             int threshold = GetThreshold();
 
-            // 1. Apply search filter
             if (!string.IsNullOrWhiteSpace(search))
             {
                 query = query.Where(p => p.Name.Contains(search) || p.Description.Contains(search));
             }
 
-            // 2. Apply category filter
             if (categoryId.HasValue)
             {
                 query = query.Where(p => p.CategoryId == categoryId.Value);
             }
 
-            // 3. Apply stock status filter at database level
             if (!string.IsNullOrWhiteSpace(stockStatus))
             {
                 if (stockStatus.Equals("Low Stock", StringComparison.OrdinalIgnoreCase))
@@ -67,7 +64,6 @@ namespace ProductManagementApi.Services
                 }
             }
 
-            // 4. Apply database-level sorting
             bool isDescending = !string.IsNullOrEmpty(sortOrder) && sortOrder.Equals("desc", StringComparison.OrdinalIgnoreCase);
 
             query = sortBy?.ToLowerInvariant() switch
@@ -79,10 +75,8 @@ namespace ProductManagementApi.Services
                 _ => query.OrderBy(p => p.Id)
             };
 
-            // 5. Get total count of matching records after filtering, before pagination
             var totalItems = await query.CountAsync();
 
-            // 6. Apply database-level pagination using Skip and Take
             var items = await query
               .Skip((pageNumber - 1) * pageSize)
               .Take(pageSize)
@@ -99,7 +93,7 @@ namespace ProductManagementApi.Services
 
         public async Task<Product?> GetProductByIdAsync(int id)
         {
-            return await _context.Products.Include(p => p.Category).FirstOrDefaultAsync(p => p.Id == id);
+            return await _context.Products.Include(p => p.Category).FirstOrDefaultAsync(p => p.Id == id && !p.IsDeleted);
         }
 
         public async Task<IEnumerable<Product>> GetLowStockProductsAsync()
@@ -107,7 +101,7 @@ namespace ProductManagementApi.Services
             int threshold = GetThreshold();
             return await _context.Products
                 .Include(p => p.Category)
-                .Where(p => p.Stock > 0 && p.Stock <= threshold)
+                .Where(p => !p.IsDeleted && p.Stock > 0 && p.Stock <= threshold)
                 .ToListAsync();
         }
 
@@ -115,14 +109,14 @@ namespace ProductManagementApi.Services
         {
             int threshold = GetThreshold();
             return await _context.Products
-                .Where(p => p.Stock > 0 && p.Stock <= threshold)
+                .Where(p => !p.IsDeleted && p.Stock > 0 && p.Stock <= threshold)
                 .CountAsync();
         }
 
         public async Task<int> GetOutOfStockCountAsync()
         {
             return await _context.Products
-                .Where(p => p.Stock == 0)
+                .Where(p => !p.IsDeleted && p.Stock == 0)
                 .CountAsync();
         }
 
@@ -161,15 +155,37 @@ namespace ProductManagementApi.Services
 
         public async Task DeleteProductAsync(int id)
         {
-            var product = await _context.Products.FindAsync(id);
+            var product = await _context.Products
+                .IgnoreQueryFilters()
+                .FirstOrDefaultAsync(p => p.Id == id);
+
             if (product != null)
             {
-                if (!string.IsNullOrEmpty(product.ImageUrl))
-                {
-                    DeletePhysicalImage(product.ImageUrl);
-                }
+                product.IsDeleted = true;
+                _context.Entry(product).State = EntityState.Modified;
+                await _context.SaveChangesAsync();
+            }
+        }
 
-                _context.Products.Remove(product);
+        public async Task<IEnumerable<Product>> GetDeletedProductsAsync()
+        {
+            return await _context.Products
+                .IgnoreQueryFilters()
+                .Include(p => p.Category)
+                .Where(p => p.IsDeleted)
+                .ToListAsync();
+        }
+
+        public async Task RestoreProductAsync(int id)
+        {
+            var product = await _context.Products
+                .IgnoreQueryFilters()
+                .FirstOrDefaultAsync(p => p.Id == id);
+
+            if (product != null && product.IsDeleted)
+            {
+                product.IsDeleted = false;
+                _context.Entry(product).State = EntityState.Modified;
                 await _context.SaveChangesAsync();
             }
         }

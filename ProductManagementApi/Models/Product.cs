@@ -7,9 +7,12 @@
         public string Description { get; set; } = string.Empty;
         public decimal Price { get; set; }
         public int Stock { get; set; }
-        public string? ImageUrl { get; set; } // Added for product image path/URL
+        public string? ImageUrl { get; set; }
 
         public DateTime CreatedDate { get; set; } = DateTime.Now;
+
+        // Soft delete flag
+        public bool IsDeleted { get; set; } = false;
 
         // Foreign Key for Category
         public int CategoryId { get; set; }

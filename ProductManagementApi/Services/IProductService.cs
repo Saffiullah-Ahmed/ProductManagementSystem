@@ -14,5 +14,7 @@ namespace ProductManagementApi.Services
         Task CreateProductAsync(Product product, IFormFile? image);
         Task UpdateProductAsync(Product product, IFormFile? image);
         Task DeleteProductAsync(int id);
+        Task<IEnumerable<Product>> GetDeletedProductsAsync();
+        Task RestoreProductAsync(int id);
     }
 }

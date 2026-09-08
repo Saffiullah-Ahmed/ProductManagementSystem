@@ -92,6 +92,28 @@ public class ProductsController : ControllerBase
         });
     }
 
+    [HttpGet("deleted")]
+    [Authorize(Roles = "Admin")]
+    public async Task<IActionResult> GetDeletedProducts()
+    {
+        var products = await _productService.GetDeletedProductsAsync();
+        var productDtos = products.Select(p => new ProductDto
+        {
+            Id = p.Id,
+            Name = p.Name,
+            Description = p.Description,
+            Price = p.Price,
+            Stock = p.Stock,
+            ImageUrl = p.ImageUrl,
+            CreatedDate = p.CreatedDate,
+            CategoryId = p.CategoryId,
+            CategoryName = p.Category?.Name ?? string.Empty,
+            StockStatus = (_productService as ProductService)?.CalculateStockStatus(p.Stock) ?? "Available"
+        });
+
+        return Ok(productDtos);
+    }
+
     [HttpGet("{id}")]
     public async Task<IActionResult> GetById(int id)
     {
@@ -194,6 +216,14 @@ public class ProductsController : ControllerBase
     public async Task<IActionResult> Delete(int id)
     {
         await _productService.DeleteProductAsync(id);
+        return NoContent();
+    }
+
+    [HttpPut("{id}/restore")]
+    [Authorize(Roles = "Admin")]
+    public async Task<IActionResult> Restore(int id)
+    {
+        await _productService.RestoreProductAsync(id);
         return NoContent();
     }
 }
